@@ -23,6 +23,7 @@ import jwt
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+import calendar_sync
 import config
 import mcp_tools
 import secret_store
@@ -321,7 +322,7 @@ def setup_start(request: Request, alias: str):
         "client_id": config.GOOGLE_CLIENT_ID,
         "redirect_uri": f"{base_url(request)}/oauth/callback",
         "response_type": "code",
-        "scope": " ".join(config.SCOPES),
+        "scope": " ".join(config.scopes_for(alias)),
         "access_type": "offline",
         "prompt": "consent select_account",
         "login_hint": config.accounts()[alias],
@@ -330,6 +331,37 @@ def setup_start(request: Request, alias: str):
     return RedirectResponse(
         f"{config.GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}", status_code=302
     )
+
+
+# ---------------------------------------------------------------- calendar mirror
+
+
+def _sync_authorized(request: Request) -> bool:
+    """Cloud Scheduler (or you, with curl) proves itself with a shared token."""
+    expected = secret_store.read(config.SYNC_TOKEN_NAME)
+    if not expected:
+        return False
+    given = request.headers.get("x-sync-token", "")
+    return bool(given) and secrets.compare_digest(given, expected)
+
+
+@app.post("/sync")
+def sync(request: Request):
+    """Mirror every source calendar into the target. Called hourly by Cloud
+    Scheduler. Also reachable from the MCP tool sync_calendars_now."""
+    if not _sync_authorized(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        return calendar_sync.run()
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)[:400]}, status_code=500)
+
+
+@app.get("/sync/status")
+def sync_status(request: Request):
+    if not _sync_authorized(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return calendar_sync.status()
 
 
 @app.get("/healthz")

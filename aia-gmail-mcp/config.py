@@ -72,3 +72,25 @@ GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
 TOKEN_TTL_SECONDS = 60 * 60 * 12
 CODE_TTL_SECONDS = 300
+
+# ---------------------------------------------------------------- calendar mirror
+# Events from every other account are copied into MIRROR_TARGET's primary
+# calendar. Only the target needs write access, so only it is asked for
+# WRITE_SCOPE at /setup. Sources stay read-only.
+MIRROR_TARGET = os.environ.get("MIRROR_TARGET", "aia").strip().lower()
+MIRROR_DAYS_BACK = int(os.environ.get("MIRROR_DAYS_BACK", "1"))
+MIRROR_DAYS_AHEAD = int(os.environ.get("MIRROR_DAYS_AHEAD", "60"))
+WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+SYNC_TOKEN_NAME = os.environ.get("SYNC_TOKEN_NAME", "calendar-sync-token")
+
+
+def mirror_sources() -> list[str]:
+    return [a for a in accounts() if a != MIRROR_TARGET]
+
+
+def scopes_for(alias: str) -> list[str]:
+    """Base scopes, plus calendar write only for the mirror target."""
+    out = list(SCOPES)
+    if alias == MIRROR_TARGET and WRITE_SCOPE not in out:
+        out.insert(3, WRITE_SCOPE)
+    return out
