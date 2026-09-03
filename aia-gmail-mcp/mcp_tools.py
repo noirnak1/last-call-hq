@@ -7,12 +7,13 @@ handing an agent the ability to mail your network unprompted.
 import json
 
 import calendar_client
+import calendar_sync
 import chat_client
 import config
 import drive_client
 import gmail_client
 
-SERVER_INFO = {"name": "aia-google", "version": "1.2.0"}
+SERVER_INFO = {"name": "aia-google", "version": "1.3.0"}
 PROTOCOL_VERSION = "2025-06-18"
 
 _ACCOUNT_DESC = (
@@ -275,6 +276,21 @@ TOOLS = [
             "required": ["account", "space"],
         },
     },
+    {
+        "name": "sync_calendars_now",
+        "description": (
+            "Run the calendar mirror immediately instead of waiting for the "
+            "hourly job. Copies every event from the other accounts into the "
+            "AIA calendar, updates changed ones, removes ones that vanished. "
+            "Returns counts. Safe to run any time."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "calendar_sync_status",
+        "description": "Which calendars mirror into which, the window, and the last run on this instance.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -332,6 +348,10 @@ def call_tool(name: str, args: dict) -> str:
         result = chat_client.messages(
             args["account"], args["space"], args.get("days_back", 7), args.get("limit", 50)
         )
+    elif name == "sync_calendars_now":
+        result = calendar_sync.run()
+    elif name == "calendar_sync_status":
+        result = calendar_sync.status()
     else:
         raise ValueError(f"Unknown tool: {name}")
     return json.dumps(result, indent=2, default=str)
